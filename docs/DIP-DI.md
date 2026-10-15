@@ -163,12 +163,12 @@ Evidencia de ejecución (Node.js v22.11.0):
 
 Comprobación del desacoplamiento (PowerShell):
 
-    Get-ChildItem -Path .\src\aplicacion -Filter *.js -Recurse |
+    Get-ChildItem -Path ./src/aplicacion -Filter *.js -Recurse |
       Select-String -Pattern 'persistencia/'
     # Resultado: sin coincidencias
 
-    Get-ChildItem -Path .\src\aplicacion, .\src\dominio -Filter *.js -Recurse |
-      Select-String -Pattern "require\('pg'\)"
+    Get-ChildItem -Path ./src/aplicacion, ./src/dominio -Filter *.js -Recurse |
+      Select-String -Pattern "require('pg')"
     # Resultado: sin coincidencias
 
 Importaciones resultantes de src/aplicacion/citaService.js:
@@ -176,35 +176,34 @@ Importaciones resultantes de src/aplicacion/citaService.js:
     const reglas = require('../dominio/reglasDeAgenda');
     const { verificarRepositorios } = require('./contratos/repositorios');
 
-## 7. Compatibilidad HTTP (parte D)
+## 7. Compatibilidad HTTP (parte D) — ejecutada contra la base de pruebas
 
-Resultados obtenidos sin DATABASE_URL (las respuestas que solo dependen de reglas de negocio) y verificaciones pendientes (requieren la base de datos de pruebas del equipo):
+Ejecución real contra la base de pruebas del equipo (Supabase, proyecto **demo-citas**) con el servidor local en el puerto 3000. Comando: node test/api-smoke.js
 
 | Petición | Esperado | Obtenido | Estado |
 | --- | --- | --- | --- |
 | GET /api/salud | 200 | **200** | OK |
-| POST /api/citas sin datos | 400 | **400** | OK (extra: valida antes de tocar la base) |
-| POST /api/citas con fecha pasada | 400 | **400** | OK |
-| GET /api/profesionales | 200 | 500 sin base de datos | Pendiente con .env |
-| GET /api/citas | 200 | — | Pendiente con .env |
-| POST /api/citas reserva válida | 201 | — | Pendiente con .env |
-| POST /api/citas reserva repetida | 409 | — | Pendiente con .env |
+| GET /api/profesionales | 200, lista JSON | **200**, 3 profesionales | OK |
+| GET /api/citas | 200, lista JSON | **200**, lista JSON | OK |
+| POST /api/citas reserva válida | 201 e identificador | **201** con id | OK |
+| POST /api/citas reserva repetida | 409 | **409** | OK |
+| POST /api/citas fecha pasada | 400 | **400** | OK |
 
-Salida observada del servidor local sin DATABASE_URL:
+Salida del script:
 
-    GET /api/salud -> 200 {"estado":"ok","servidor":"activo","hora":"..."}
-    POST /api/citas SIN DATOS -> 400
-    POST /api/citas FECHA PASADA -> 400
-    GET /api/profesionales -> 500 (sin DATABASE_URL, se espera 500)
+    $ node test/api-smoke.js
+    API comprobada: GET 200, POST 201, 409 y 400.
+    (código de salida: 0)
 
-Pasos pendientes, una vez disponible la cadena de conexión de la base de **pruebas**:
+Estado de la base después de la prueba (consultado por SQL):
 
-    # Terminal 1 (con .env que contenga DATABASE_URL)
-    npm start
-    # Terminal 2
-    node test/api-smoke.js   # valida 200, 201, 409 y 400
+    profesionales: 3 filas (Dra. Laura Pérez, Dr. Andrés Rojas, Dra. Camila Torres)
+    citas: 5 filas, incluida la creada por la prueba (id 5, paciente «Prueba Semana 9»)
+    El POST repetido devolvió 409 y NO generó una segunda fila.
 
-> El script test/api-smoke.js **crea un registro**. Debe ejecutarse únicamente sobre una base de datos propia de pruebas, nunca sobre el servicio compartido de Render. El resultado 409 se comprueba con peticiones secuenciales; no demuestra seguridad ante solicitudes simultáneas.
+Nota operativa: el proyecto de Supabase del equipo estaba **pausado** (plan gratuito) y hubo que reactivarlo para esta verificación; mientras estaba inactivo su DNS no resolvía y el pooler respondía «tenant not found».
+
+> El script test/api-smoke.js **crea un registro** y debe ejecutarse únicamente sobre una base de datos propia de pruebas. El resultado 409 se comprueba con peticiones secuenciales; no demuestra seguridad ante solicitudes simultáneas (condición de carrera descrita en el punto 8).
 
 ## 8. Qué no resuelven DIP ni DI
 
